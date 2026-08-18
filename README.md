@@ -25,11 +25,25 @@ Open http://localhost:3000
 3. Copy the **API Read Access Token** (v4 auth, long JWT)
 4. Paste into `TMDB_API_KEY=` in `.env.local`
 
+### Subtitles (optional)
+
+Automatic subtitle search needs a free key:
+
+1. Claim one at https://store.wyzie.io/redeem
+2. Add `WYZIE_API_KEY=...` to `.env.local`
+
+Without it the player still takes a pasted `.vtt` / `.srt` URL — only the
+per-movie search is disabled.
+
+Note that the movie itself plays inside a third-party iframe whose clock is not
+readable from this app, so overlay subtitles are started and offset by hand from
+the player's Sync controls.
+
 ## Routes
 
 - `/`                       Homepage (hero + trending + popular + top rated + upcoming + continue watching)
 - `/movie/[id]`             Cinematic detail page with cast, recommendations, trailer modal
-- `/movie/[id]/watch`       Embedded streaming player with source switcher
+- `/movie/[id]/watch`       Embedded streaming player with source switcher and subtitle overlay
 - `/watchlist`              Saved titles
 - `/genre/[id]`             Browse by genre
 - `/login`, `/signup`       Auth pages (localStorage-backed)
