@@ -9,8 +9,12 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SubtitleClock } from "@/hooks/useSubtitleClock";
+import { formatClock, parseClock } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SubtitleCue, SubtitleTrack } from "@/services/subtitles";
+
+/** Remembered across movies — a viewer's subtitle language rarely changes. */
+const LANG_KEY = "cs.sublang";
 
 const LANGUAGES = [
   { code: "en", label: "English" },
@@ -21,14 +25,6 @@ const LANGUAGES = [
   { code: "es", label: "Español" },
   { code: "fr", label: "Français" },
 ];
-
-const clock2 = (n: number) => String(Math.floor(n)).padStart(2, "0");
-const formatClock = (sec: number) => {
-  const s = Math.max(0, sec);
-  const h = Math.floor(s / 3600);
-  const rest = `${clock2((s % 3600) / 60)}:${clock2(s % 60)}`;
-  return h ? `${h}:${rest}` : rest;
-};
 
 interface Props {
   movieId: number | string;
@@ -47,10 +43,13 @@ export function SubtitlePanel({
   cueCount,
   onCues,
 }: Props) {
-  const [lang, setLang] = useState("en");
+  // Null until the stored preference is read, so the first search is not fired
+  // against "en" only to be redone against the viewer's actual language.
+  const [lang, setLang] = useState<string | null>(null);
   const [tracks, setTracks] = useState<SubtitleTrack[]>([]);
   const [activeTrack, setActiveTrack] = useState<string | null>(null);
   const [url, setUrl] = useState("");
+  const [seekTo, setSeekTo] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,10 +107,29 @@ export function SubtitlePanel({
     [movieId, loadFile],
   );
 
-  // Try to have English cues ready before the viewer goes looking for them.
   useEffect(() => {
-    search("en");
-  }, [search]);
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(LANG_KEY);
+    } catch {
+      // Private mode or blocked storage — fall through to the default.
+    }
+    setLang(stored ?? "en");
+  }, []);
+
+  // Have cues ready before the viewer goes looking for them.
+  useEffect(() => {
+    if (lang) search(lang);
+  }, [lang, search]);
+
+  const chooseLang = (code: string) => {
+    setLang(code);
+    try {
+      localStorage.setItem(LANG_KEY, code);
+    } catch {
+      // Preference just won't persist; the picker still works this session.
+    }
+  };
 
   return (
     <div className="space-y-3 rounded-xl glass p-3">
@@ -136,11 +154,8 @@ export function SubtitlePanel({
         </button>
 
         <select
-          value={lang}
-          onChange={(e) => {
-            setLang(e.target.value);
-            search(e.target.value);
-          }}
+          value={lang ?? "en"}
+          onChange={(e) => chooseLang(e.target.value)}
           className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/80"
         >
           {LANGUAGES.map((l) => (
@@ -248,6 +263,35 @@ export function SubtitlePanel({
             )}
           </div>
 
+          <form
+            className="flex items-center gap-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const sec = parseClock(seekTo);
+              if (sec === null) return;
+              clock.seek(sec);
+              clock.start();
+              setSeekTo("");
+            }}
+          >
+            <input
+              type="text"
+              inputMode="numeric"
+              value={seekTo}
+              onChange={(e) => setSeekTo(e.target.value)}
+              placeholder="12:30"
+              aria-label="Match the position shown in the player"
+              className="w-20 rounded bg-white/5 px-2 py-1 text-xs text-white/80 placeholder:text-white/30"
+            />
+            <button
+              type="submit"
+              disabled={parseClock(seekTo) === null}
+              className="rounded glass px-2 py-1 text-xs hover:bg-white/10 disabled:opacity-40"
+            >
+              Match
+            </button>
+          </form>
+
           <button
             type="button"
             onClick={clock.reset}
@@ -257,8 +301,10 @@ export function SubtitlePanel({
           </button>
 
           <p className="w-full text-[11px] text-white/35">
-            The player runs in a sandboxed frame, so its clock is not readable
-            from here. Press Start when the film starts, then trim with ±0.5s.
+            The film plays in a sandboxed frame, so its clock is not readable
+            from here. Press Start as the film begins — or type the position the
+            player itself shows and hit Match — then trim with ±0.5s. The same
+            controls sit on the video, so they stay reachable in fullscreen.
           </p>
         </div>
       )}

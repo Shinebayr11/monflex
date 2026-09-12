@@ -6,6 +6,7 @@ import { useWatchlist } from "@/providers/WatchlistProvider";
 import { getSourceById, STREAMING_SOURCES } from "@/services/streamingSources";
 import type { SubtitleCue } from "@/services/subtitles";
 import type { Movie } from "@/types/tmdb";
+import { CaptionControls } from "./CaptionControls";
 import { SourceSwitcher } from "./SourceSwitcher";
 import { SubtitleOverlay } from "./SubtitleOverlay";
 import { SubtitlePanel } from "./SubtitlePanel";
@@ -38,6 +39,13 @@ export function MoviePlayer({ movie, nextMovieId }: Props) {
   const [cues, setCues] = useState<SubtitleCue[]>([]);
   const [subsEnabled, setSubsEnabled] = useState(true);
   const clock = useSubtitleClock();
+
+  // The clock object is rebuilt on every tick, so shortcut handlers read it
+  // through a ref rather than re-binding the listener ten times a second.
+  const clockRef = useRef(clock);
+  useEffect(() => {
+    clockRef.current = clock;
+  });
 
   const source = getSourceById(sourceId);
   const embedUrl = source.getEmbedUrl(movie.id, {
@@ -76,7 +84,14 @@ export function MoviePlayer({ movie, nextMovieId }: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
       if (e.key === "f") toggleFullscreen();
-      if (e.key === "c" && cues.length) setSubsEnabled((v) => !v);
+      if (e.key === "c" && cues.length) {
+        setSubsEnabled((v) => !v);
+        // Pressing C as the film begins is the moment to start the clock;
+        // once it has been started, toggling visibility must not disturb it.
+        if (!clockRef.current.started) clockRef.current.start();
+      }
+      if (e.key === "[") clockRef.current.nudge(-0.5);
+      if (e.key === "]") clockRef.current.nudge(0.5);
       if (e.key === "n" && nextMovieId)
         window.location.href = `/movie/${nextMovieId}/watch`;
     };
@@ -108,8 +123,25 @@ export function MoviePlayer({ movie, nextMovieId }: Props) {
 
         <SubtitleOverlay cues={cues} time={clock.time} visible={subsEnabled} />
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-between p-3">
-          <div className="pointer-events-auto" />
+        {subsEnabled && cues.length > 0 && !clock.started && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-3">
+            <p className="glass-strong rounded-full px-4 py-1.5 text-center text-[11px] text-white/80">
+              {cues.length} caption lines ready — press{" "}
+              <kbd className="rounded border border-white/20 px-1">C</kbd> or ▶
+              the moment the film starts.
+            </p>
+          </div>
+        )}
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-between gap-2 p-3">
+          <div className="pointer-events-auto">
+            <CaptionControls
+              clock={clock}
+              enabled={subsEnabled}
+              onEnabledChange={setSubsEnabled}
+              cueCount={cues.length}
+            />
+          </div>
           <div className="pointer-events-auto flex items-center gap-2">
             {nextMovieId && (
               <a
@@ -159,7 +191,10 @@ export function MoviePlayer({ movie, nextMovieId }: Props) {
         <kbd className="rounded border border-white/15 px-1.5">F</kbd> for
         fullscreen ·{" "}
         <kbd className="rounded border border-white/15 px-1.5">C</kbd> for
-        captions
+        captions ·{" "}
+        <kbd className="rounded border border-white/15 px-1.5">[</kbd> /{" "}
+        <kbd className="rounded border border-white/15 px-1.5">]</kbd> to nudge
+        their timing
         {nextMovieId && (
           <>
             {" "}

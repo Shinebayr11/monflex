@@ -5,6 +5,8 @@ export interface SubtitleClock {
   /** Effective subtitle time in seconds (elapsed + offset). */
   time: number;
   running: boolean;
+  /** True once the viewer has started the clock, and until they reset it. */
+  started: boolean;
   offset: number;
   start: () => void;
   pause: () => void;
@@ -26,6 +28,7 @@ export function useSubtitleClock(): SubtitleClock {
   const baseRef = useRef(0);
   const startedAtRef = useRef<number | null>(null);
   const [running, setRunning] = useState(false);
+  const [started, setStarted] = useState(false);
   const [offset, setOffset] = useState(0);
   const [, tick] = useState(0);
 
@@ -45,6 +48,7 @@ export function useSubtitleClock(): SubtitleClock {
     if (startedAtRef.current !== null) return;
     startedAtRef.current = Date.now();
     setRunning(true);
+    setStarted(true);
   }, []);
 
   const pause = useCallback(() => {
@@ -73,6 +77,7 @@ export function useSubtitleClock(): SubtitleClock {
     baseRef.current = 0;
     startedAtRef.current = null;
     setRunning(false);
+    setStarted(false);
     setOffset(0);
     tick((t) => t + 1);
   }, []);
@@ -80,6 +85,7 @@ export function useSubtitleClock(): SubtitleClock {
   return {
     time: elapsed() + offset,
     running,
+    started,
     offset,
     start,
     pause,
