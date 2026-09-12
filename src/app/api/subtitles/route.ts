@@ -145,7 +145,16 @@ export async function GET(req: NextRequest) {
       url.searchParams.set("key", key);
 
       const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-      if (!res.ok) return bad(`Subtitle search returned ${res.status}`, 502);
+      if (!res.ok) {
+        // "Nothing matched" comes back as a 400, which is an empty result
+        // rather than a failure — the caller renders its own empty state.
+        const detail = await res.json().catch(() => null);
+        const upstream =
+          typeof detail?.message === "string" ? detail.message : "";
+        if (/no subtitles found/i.test(upstream))
+          return Response.json({ tracks: [] });
+        return bad(upstream || `Subtitle search returned ${res.status}`, 502);
+      }
 
       const body = await res.json();
       const list = Array.isArray(body) ? body : (body?.results ?? []);
