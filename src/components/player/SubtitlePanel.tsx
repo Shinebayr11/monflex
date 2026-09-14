@@ -302,9 +302,11 @@ export function SubtitlePanel({
 
           <p className="w-full text-[11px] text-white/35">
             The film plays in a sandboxed frame, so its clock is not readable
-            from here. Press Start as the film begins — or type the position the
-            player itself shows and hit Match — then trim with ±0.5s. The same
-            controls sit on the video, so they stay reachable in fullscreen.
+            from here: captions start when you press play, then drift is yours
+            to trim. Use ±0.5s, or type the position the player itself shows and
+            hit Match. Once you have clicked into the player it keeps the
+            keyboard, so reach for the controls on the video — they also stay
+            put in fullscreen, which this panel does not.
           </p>
         </div>
       )}

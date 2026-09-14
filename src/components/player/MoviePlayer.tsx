@@ -34,6 +34,7 @@ export function MoviePlayer({ movie, nextMovieId }: Props) {
   const [loading, setLoading] = useState(true);
   const [isFull, setIsFull] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const { updateProgress } = useWatchlist();
 
   const [cues, setCues] = useState<SubtitleCue[]>([]);
@@ -69,6 +70,28 @@ export function MoviePlayer({ movie, nextMovieId }: Props) {
     return () => clearInterval(interval);
   }, [movie.id, movie.title, movie.backdrop_path, updateProgress]);
 
+  /**
+   * Start the caption clock when the viewer presses play.
+   *
+   * The provider's play button is inside a cross-origin iframe, so the click
+   * itself is invisible to us — but it moves focus into the frame, which blurs
+   * this window. That pairing (window blurred *and* the frame now focused) is
+   * the closest observable proxy for "playback just started", and it beats
+   * making every viewer arm the clock by hand. Ads or a stray click can fire it
+   * early, which is what the trim controls and Reset are for.
+   */
+  useEffect(() => {
+    if (!cues.length) return;
+    const onBlur = () => {
+      if (document.activeElement !== iframeRef.current) return;
+      if (clockRef.current.started) return;
+      clockRef.current.start();
+      setSubsEnabled(true);
+    };
+    window.addEventListener("blur", onBlur);
+    return () => window.removeEventListener("blur", onBlur);
+  }, [cues.length]);
+
   const toggleFullscreen = useCallback(async () => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
@@ -85,10 +108,15 @@ export function MoviePlayer({ movie, nextMovieId }: Props) {
       if (isTypingTarget(e.target)) return;
       if (e.key === "f") toggleFullscreen();
       if (e.key === "c" && cues.length) {
-        setSubsEnabled((v) => !v);
-        // Pressing C as the film begins is the moment to start the clock;
-        // once it has been started, toggling visibility must not disturb it.
-        if (!clockRef.current.started) clockRef.current.start();
+        // Before the clock has ever run, C means "captions, now" — it must not
+        // toggle the (enabled by default) overlay off. After that it is a
+        // plain show/hide that leaves the running clock alone.
+        if (!clockRef.current.started) {
+          setSubsEnabled(true);
+          clockRef.current.start();
+        } else {
+          setSubsEnabled((v) => !v);
+        }
       }
       if (e.key === "[") clockRef.current.nudge(-0.5);
       if (e.key === "]") clockRef.current.nudge(0.5);
@@ -112,6 +140,7 @@ export function MoviePlayer({ movie, nextMovieId }: Props) {
         )}
         <iframe
           key={embedUrl}
+          ref={iframeRef}
           src={embedUrl}
           title={movie.title}
           allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
@@ -126,9 +155,10 @@ export function MoviePlayer({ movie, nextMovieId }: Props) {
         {subsEnabled && cues.length > 0 && !clock.started && (
           <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-3">
             <p className="glass-strong rounded-full px-4 py-1.5 text-center text-[11px] text-white/80">
-              {cues.length} caption lines ready — press{" "}
-              <kbd className="rounded border border-white/20 px-1">C</kbd> or ▶
-              the moment the film starts.
+              {cues.length} caption lines ready — they start with the film. Out
+              of step? Trim with{" "}
+              <kbd className="rounded border border-white/20 px-1">[</kbd>{" "}
+              <kbd className="rounded border border-white/20 px-1">]</kbd>.
             </p>
           </div>
         )}
