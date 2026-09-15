@@ -11,13 +11,6 @@ import { SourceSwitcher } from "./SourceSwitcher";
 import { SubtitleOverlay } from "./SubtitleOverlay";
 import { SubtitlePanel } from "./SubtitlePanel";
 
-/**
- * Asked of the provider's own player via the embed URL. Kept fixed rather than
- * following the overlay's language picker: changing it rebuilds the iframe src,
- * which restarts playback.
- */
-const EMBED_SUBTITLE_LANG = "en";
-
 interface Props {
   movie: Pick<Movie, "id" | "title" | "backdrop_path">;
   nextMovieId?: number;
@@ -48,10 +41,7 @@ export function MoviePlayer({ movie, nextMovieId }: Props) {
     clockRef.current = clock;
   });
 
-  const source = getSourceById(sourceId);
-  const embedUrl = source.getEmbedUrl(movie.id, {
-    subtitleLang: source.supportsSubtitleLang ? EMBED_SUBTITLE_LANG : undefined,
-  });
+  const embedUrl = getSourceById(sourceId).getEmbedUrl(movie.id);
 
   useEffect(() => {
     const startedAt = Date.now();

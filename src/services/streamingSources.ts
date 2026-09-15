@@ -7,58 +7,40 @@
  * streaming, replace this module with your own DRM/HLS endpoints.
  *
  * SUBTITLES: the provider renders its own player inside a cross-origin iframe,
- * so we cannot attach tracks to it. The most we can do is ask, via a query
- * param, for a preferred subtitle language — and only vidsrc documents one.
- * A provider that ignores the param simply plays without subtitles, which is
- * why SubtitleOverlay exists as the fallback that does not depend on any of this.
+ * so we cannot attach tracks to it — SubtitleOverlay draws them over the frame
+ * instead. Asking the provider for a subtitle language via a query param was
+ * tried and removed: see the vidsrc entry. Keep these URLs bare.
  */
 export interface StreamingSource {
   id: string;
   label: string;
   quality?: string;
   language?: string;
-  /** True when the embed URL accepts a preferred-subtitle-language hint. */
-  supportsSubtitleLang: boolean;
-  getEmbedUrl: (
-    tmdbId: number | string,
-    opts?: { subtitleLang?: string },
-  ) => string;
+  getEmbedUrl: (tmdbId: number | string) => string;
 }
-
-const withParams = (base: string, params: Record<string, string>) => {
-  const url = new URL(base);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  return url.toString();
-};
 
 export const STREAMING_SOURCES: StreamingSource[] = [
   {
     id: "vidsrc",
     label: "VidSrc",
     quality: "HD",
-    // `ds_lang` is vidsrc's documented default-subtitle-language param. It could
-    // not be re-verified here (the docs domain no longer resolves), but an
-    // unrecognised query param is ignored, so the cost of being wrong is nil.
-    supportsSubtitleLang: true,
-    getEmbedUrl: (id, opts) =>
-      opts?.subtitleLang
-        ? withParams(`https://vidsrc.to/embed/movie/${id}`, {
-            ds_lang: opts.subtitleLang,
-          })
-        : `https://vidsrc.to/embed/movie/${id}`,
+    // Do NOT pass `ds_lang` here. It was assumed to be an unrecognised param
+    // that the provider would ignore; it is not. With it, vidsrc's shell page
+    // builds its inner frame as `/embed/movie//` — the id is dropped — and the
+    // player answers "This media is unavailable at the moment." for every film.
+    // We draw our own captions over the frame anyway, so nothing is lost.
+    getEmbedUrl: (id) => `https://vidsrc.to/embed/movie/${id}`,
   },
   {
     id: "2embed",
     label: "2Embed",
     quality: "HD",
-    supportsSubtitleLang: false,
     getEmbedUrl: (id) => `https://www.2embed.cc/embed/${id}`,
   },
   {
     id: "superembed",
     label: "SuperEmbed",
     quality: "HD",
-    supportsSubtitleLang: false,
     getEmbedUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
   },
 ];
